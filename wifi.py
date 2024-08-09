@@ -46,7 +46,7 @@ def get_current_connection():
     lines = result.stdout.decode('utf-8').split('\n')
     for line in lines:
         parts = line.split(':')
-        if len(parts) > 2 and parts[2] == '802-11-wireless':
+        if len(parts) > 3 and parts[2] == '802-11-wireless':
             return parts[0]  # Return the active WiFi SSID
     return None
 
@@ -60,7 +60,7 @@ def get_existing_connections():
     existing_ssids = set()
     for line in lines:
         parts = line.split(':')
-        if len(parts) > 3 and parts[3] == '802-11-wireless':
+        if len(parts) > 3 and parts[2] == '802-11-wireless':
             existing_ssids.add(parts[0])  # Add the SSID to the set
     return existing_ssids
 
@@ -91,7 +91,7 @@ def read_passwords(file_path):
 
 def generate_passwords(ssid):
     # Clean the SSID by removing spaces and non-alphanumeric characters
-    clean_ssid = re.sub(r'\W+', '', ssid.lower())
+    clean_ssid = re.sub(r'\[\W\_\-\.\]+', '', ssid.lower())
     ssid_upper = clean_ssid.upper()
     years = [str(year) for year in range(2010, 2025)]
     ranges = [str(num) for num in range(10, 25)]
@@ -185,7 +185,12 @@ def main():
     failed_attempts = read_failed_attempts(FAILED_CSV_FILE)
 
     for ssid, signal in ssid_signal_pairs:
-        if ssid == current_ssid or ssid in existing_ssids or should_ignore_ssid(ssid, ignore_patterns):
+        if (
+                ssid == "" or
+                ssid == current_ssid or
+                ssid in existing_ssids or
+                should_ignore_ssid(ssid, ignore_patterns)
+        ):
             print(f'Skipping network: {ssid} (already connected, configured, or ignored)')
             continue
 
