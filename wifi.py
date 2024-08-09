@@ -90,15 +90,22 @@ def read_passwords(file_path):
 
 
 def generate_passwords(ssid):
-    ssid_lower = ssid.lower()
-    ssid_upper = ssid.upper()
+    # Clean the SSID by removing spaces and non-alphanumeric characters
+    clean_ssid = re.sub(r'\W+', '', ssid.lower())
+    ssid_upper = clean_ssid.upper()
     years = [str(year) for year in range(2010, 2025)]
+    ranges = [str(num) for num in range(10, 25)]
     passwords = [
-        ssid_lower,
+        clean_ssid,
         ssid_upper,
-        *(ssid_lower + year for year in years),
-        ssid_lower + '123'
+        *(clean_ssid + year for year in years),
+        *(clean_ssid + num for num in ranges),
+        clean_ssid + '123'
     ]
+
+    # Filter out passwords that are less than 8 characters long
+    passwords = [pwd for pwd in passwords if len(pwd) >= 8]
+
     return passwords
 
 
