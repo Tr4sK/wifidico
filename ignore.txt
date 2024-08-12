@@ -1,2 +1,4 @@
 HP-Print.*
 Redmi.*
+.*iPhone.*
+.*HUAWEI.*
